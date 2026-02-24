@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const jwt = require('jsonwebtoken');
+const authMiddleware = require('../middleware/auth');
 
 // Helper function: Strong Password & Email check
 const validateSignup = (email, password) => {
@@ -13,6 +14,29 @@ const validateSignup = (email, password) => {
     if (!passwordRegex.test(password)) return "Password must be at least 8 characters long and include uppercase, lowercase, a number, and a special character.";
     return null;
 };
+
+// NEW: GET CURRENT USER PROFILE FROM DATABASE
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+      const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('id, email, full_name')
+          .eq('id', req.user.userId)
+          .single();
+
+      if (error || !profile) {
+          return res.status(404).json({ error: "Profile not found" });
+      }
+
+      res.json({
+          id: profile.id,
+          email: profile.email,
+          fullName: profile.full_name // Mapping snake_case to camelCase for frontend
+      });
+  } catch (err) {
+      res.status(500).json({ error: "Server error" });
+  }
+});
 
 // SIGNUP ROUTE
 router.post('/signup', async (req, res) => {
