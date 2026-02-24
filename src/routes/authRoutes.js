@@ -111,4 +111,38 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// UPDATE USER PROFILE
+router.put('/update-profile', authMiddleware, async (req, res) => {
+  const { fullName } = req.body;
+
+  if (!fullName) {
+    return res.status(400).json({ error: "Full name is required." });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ full_name: fullName })
+      .eq('id', req.user.userId)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: data.id,
+        email: data.email,
+        fullName: data.full_name
+      }
+    });
+  } catch (err) {
+    console.error("Profile Update Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 module.exports = router;
