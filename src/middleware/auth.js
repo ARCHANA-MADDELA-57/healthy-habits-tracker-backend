@@ -1,44 +1,28 @@
-const express = require('express');
-const router = express.Router();
-const supabase = require('../config/supabase');
 const jwt = require('jsonwebtoken');
 
-// SIGNUP
-router.post('/signup', async (req, res) => {
-    const { email, password } = req.body;
-    
-    // Create user in Supabase Auth
-    const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-    });
+const auth = (req, res, next) => {
+    try {
+        const authHeader = req.header('Authorization');
+        
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            console.log("Auth Denied: No Bearer Token");
+            return res.status(401).json({ error: "No token, authorization denied" });
+        }
 
-    if (error) return res.status(400).json({ error: error.message });
-    res.status(201).json({ message: "Success! Check your email for verification.", user: data.user });
-});
-
-// LOGIN
-router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-
-    // Verify credentials with Supabase
-    const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-    });
-
-    if (error || !data.user) {
-        return res.status(401).json({ error: "Invalid login credentials" });
+        const token = authHeader.split(' ')[1];
+        
+        // Verify token using the same secret from your login route
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // IMPORTANT: This attaches the data to the request
+        req.user = decoded; 
+        
+        console.log("Auth Success: User ID", req.user.userId);
+        next();
+    } catch (err) {
+        console.log("Auth Error:", err.message);
+        res.status(401).json({ error: "Token is not valid" });
     }
+};
 
-    // Generate our JWT for the frontend to use
-    const token = jwt.sign(
-        { userId: data.user.id, email: data.user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-    );
-
-    res.json({ token, user: data.user });
-});
-
-module.exports = router;
+module.exports = auth;
