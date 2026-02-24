@@ -145,4 +145,57 @@ router.put('/update-profile', authMiddleware, async (req, res) => {
   }
 });
 
+// 1. Send the Public Key to Frontend
+router.get('/vapid-public-key', (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+// 2. Receive and Save Subscription to Supabase
+router.post('/subscribe', authMiddleware, async (req, res) => {
+  const { subscription } = req.body;
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .upsert([{ 
+      user_id: req.user.userId, 
+      subscription_json: subscription 
+    }]);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json({ success: true });
+});
+
+// TEMPORARY: Manual Test Route
+router.post('/send-test-push', authMiddleware, async (req, res) => {
+  const webpush = require('web-push');
+  
+  // Set details again inside the route if you aren't sure they are set globally
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+
+  const { data: sub, error } = await supabase
+  .from('push_subscriptions')
+  .select('*')
+  .eq('user_id', req.user.userId)
+  .order('created_at', { ascending: false }) // Always get the most recent registration
+  .limit(1)
+  .maybeSingle(); // Prevents crashing if the table is empty
+
+  if (error || !sub) return res.status(404).json({ error: "Subscription not found" });
+
+  try {
+    await webpush.sendNotification(sub.subscription_json, JSON.stringify({
+      title: "Test Alert",
+      body: "Working!"
+    }));
+    res.json({ success: true });
+  } catch (err) {
+    // THIS LOG IS CRITICAL: Check your Node terminal for this output
+    console.error("WEB PUSH ERROR DETAILS:", err.statusCode, err.body);
+    res.status(500).json({ error: err.message, details: err.body });
+  }
+});
+
 module.exports = router;
