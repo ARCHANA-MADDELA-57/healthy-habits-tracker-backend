@@ -51,3 +51,52 @@ exports.getStats = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.getMonthlyTrend = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const habits = await Habit.find({ 
+      user: userId,
+      "logs.date": { $gte: thirtyDaysAgo } 
+    });
+
+    // Create a map of date strings to completion percentages
+    const trendMap = {};
+
+    habits.forEach(habit => {
+      habit.logs.forEach(log => {
+        if (log.date >= thirtyDaysAgo) {
+          const dateStr = log.date.toISOString().split('T')[0];
+          if (!trendMap[dateStr]) {
+            trendMap[dateStr] = { totalItems: 0, completedItems: 0 };
+          }
+          trendMap[dateStr].totalItems += habit.target;
+          trendMap[dateStr].completedItems += log.count;
+        }
+      });
+    });
+
+    // Generate the last 30 days to ensure no gaps in the chart
+    const finalTrend = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      
+      const dayData = trendMap[dateStr];
+      const percentage = dayData ? Math.round((dayData.completedItems / dayData.totalItems) * 100) : 0;
+
+      finalTrend.push({
+        dateLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        percentage: percentage
+      });
+    }
+
+    res.json(finalTrend);
+  } catch (err) {
+    res.status(500).json({ message: "Server Error", error: err.message });
+  }
+};

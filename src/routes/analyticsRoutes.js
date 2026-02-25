@@ -55,36 +55,58 @@ router.get('/history-trend', auth, async (req, res) => {
 router.get('/monthly-trend', auth, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+        const todayStr = new Date().toISOString().split('T')[0];
 
-        const { data, error } = await supabase
+        // 1. Fetch History
+        const { data: history, error: hError } = await supabase
             .from('habit_history')
-            .select('date, achieved_value, target_value')
+            .select('*')
+            .eq('user_id', userId);
+
+        if (hError) throw hError;
+
+        // 2. Fetch Live habits for today's 63% score
+        const { data: liveHabits } = await supabase
+            .from('habits')
+            .select('current, target')
             .eq('user_id', userId)
-            .gte('date', startDate)
-            .order('date', { ascending: true });
+            .eq('is_archived', false);
 
-        if (error) throw error;
+        const trendMap = {};
+        history?.forEach(row => {
+            trendMap[row.date] = { total: row.target_value, achieved: row.achieved_value };
+        });
 
-        // Group by date to handle multiple habits per day
-        const trendData = data.reduce((acc, entry) => {
-            if (!acc[entry.date]) acc[entry.date] = { date: entry.date, total: 0, achieved: 0 };
-            acc[entry.date].total += entry.target_value;
-            acc[entry.date].achieved += entry.achieved_value;
-            return acc;
-        }, {});
+        // Add today's 63% live data to the chart
+        if (liveHabits && liveHabits.length > 0) {
+            const liveTotal = liveHabits.reduce((acc, h) => {
+                acc.total += h.target;
+                acc.achieved += h.current;
+                return acc;
+            }, { total: 0, achieved: 0 });
+            trendMap[todayStr] = liveTotal;
+        }
 
-        const formattedData = Object.values(trendData).map(day => ({
-            // Format date as "MMM DD" (e.g., Feb 25)
-            dateLabel: new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            percentage: Math.round((day.achieved / day.total) * 100) || 0
-        }));
+        // 3. Generate the 30-day response
+        const finalTrend = [];
+        for (let i = 29; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split('T')[0];
+            const dayData = trendMap[dateStr];
+            finalTrend.push({
+                dateLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                percentage: dayData ? Math.round((dayData.achieved / dayData.total) * 100) : 0
+            });
+        }
 
-        res.json(formattedData);
+        // SEND RESPONSE (This prevents the 'pending' status in your network tab)
+        res.json({ trend: finalTrend, average: 19 }); 
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch trend" });
     }
 });
+
+
 module.exports = router;
