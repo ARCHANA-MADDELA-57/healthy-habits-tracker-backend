@@ -1,27 +1,52 @@
-const supabase = require('../config/supabase');
+const Habit = require("../models/Habit");
+const ActivityLog = require("../models/ActivityLog");
 
-exports.getAnalyticsStats = async (req, res) => {
+exports.getStats = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.id;
 
-    // We fetch habits directly to ensure the "Current/Target" bars are live
-    const { data: habits, error: habitError } = await supabase
-      .from('habits')
-      .select('*')
-      .eq('user_id', userId);
+    // 1. Create a "Today" date range (00:00:00 to 23:59:59)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
-    const { data: history, error: historyError } = await supabase
-      .from('habit_history')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false });
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
 
-    if (habitError || historyError) throw habitError || historyError;
+    // 2. Fetch all habits for the user
+    const userHabits = await Habit.find({ userId });
 
-    // Log this to your terminal to see if the new habit is actually in the array
-    console.log("Analytics Data Sent:", habits.length, "habits found");
+    // 3. Aggregate logs ONLY for today
+    const stats = await ActivityLog.aggregate([
+      { 
+        $match: { 
+          userId: req.user._id, // Ensure type matches (ObjectId vs String)
+          date: { $gte: startOfToday, $lte: endOfToday } 
+        } 
+      },
+      { 
+        $group: { 
+          _id: "$habitId", 
+          dailyTotal: { $sum: "$value" } 
+        } 
+      }
+    ]);
 
-    res.json({ habits: habits || [], history: history || [] });
+    // 4. Map data: Use today's progress vs the daily target
+    const habitsWithProgress = userHabits.map(habit => {
+      const log = stats.find(s => s._id.toString() === habit._id.toString());
+      return {
+        id: habit._id,
+        title: habit.title,
+        category: habit.category,
+        target: habit.target, // Use the daily target from your model
+        current: log ? log.dailyTotal : 0
+      };
+    });
+
+    res.json({ 
+      habits: habitsWithProgress,
+      date: startOfToday // Optional: Send date back for UI confirmation
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
