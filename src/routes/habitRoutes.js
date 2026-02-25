@@ -151,16 +151,35 @@ router.put('/update/:id', auth, async (req, res) => {
   }
 });
 
-// DELETE
+// DELETE HABIT
 router.delete('/:id', auth, async (req, res) => {
-  const { error } = await supabase
-    .from('habits')
-    .delete()
-    .eq('id', req.params.id)
-    .eq('user_id', req.user.userId);
+  const habitId = req.params.id;
+  const userId = req.user.userId;
 
-  if (error) return res.status(400).json(error);
-  res.json({ message: "Deleted successfully" });
+  try {
+    // 1. DELETE FROM HISTORY FIRST
+    const { error: historyError } = await supabase
+      .from('habit_history')
+      .delete()
+      .eq('habit_id', habitId);
+
+    if (historyError) throw historyError;
+
+    // 2. NOW DELETE THE HABIT
+    const { data, error: habitError } = await supabase
+      .from('habits')
+      .delete()
+      .eq('id', habitId)
+      .eq('user_id', userId)
+      .select();
+
+    if (habitError) throw habitError;
+
+    res.json({ message: "Habit and history deleted successfully" });
+  } catch (err) {
+    console.error("Delete Error:", err.message);
+    res.status(400).json({ error: err.message });
+  }
 });
 
 router.post('/force-reset', auth, async (req, res) => {
@@ -174,6 +193,17 @@ router.post('/force-reset', auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+router.patch('/archive/:id', auth, async (req, res) => {
+  const { error } = await supabase
+    .from('habits')
+    .update({ is_archived: true })
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.userId);
+
+  if (error) return res.status(400).json(error);
+  res.json({ message: "Habit archived" });
 });
 
 module.exports = router;
