@@ -5,11 +5,11 @@ const supabase = require('../config/supabase');
 
 // GET ALL HABITS
 router.get('/my-habits', auth, async (req, res) => {
-  // req.user is now available here because 'auth' ran first
   const { data, error } = await supabase
       .from('habits')
       .select('*')
-      .eq('user_id', req.user.userId); 
+      .eq('user_id', req.user.userId)
+      .eq('is_archived', false); // <--- ADD THIS LINE HERE
 
   if (error) return res.status(400).json(error);
   res.json(data);
@@ -161,6 +161,19 @@ router.delete('/:id', auth, async (req, res) => {
 
   if (error) return res.status(400).json(error);
   res.json({ message: "Deleted successfully" });
+});
+
+router.post('/force-reset', auth, async (req, res) => {
+  try {
+    // This calls the SQL function in Supabase that resets 'current' to 0 
+    // and sets 'is_archived' to true for one-time habits.
+    const { error } = await supabase.rpc('reset_daily_habits');
+
+    if (error) throw error;
+    res.json({ message: "System reset successful!" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

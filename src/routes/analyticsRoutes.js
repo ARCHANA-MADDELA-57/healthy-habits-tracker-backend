@@ -3,7 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const supabase = require('../config/supabase');
 
-// Existing Stats Route
+// 1. Updated Stats Route
 router.get('/stats', auth, async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -12,7 +12,8 @@ router.get('/stats', auth, async (req, res) => {
         const { data: habits, error: habitError } = await supabase
             .from('habits')
             .select('*')
-            .eq('user_id', userId);
+            .eq('user_id', userId)
+            .eq('is_archived', false); // <--- ADD THIS FILTER
 
         let historyQuery = supabase
             .from('habit_history')
@@ -26,7 +27,7 @@ router.get('/stats', auth, async (req, res) => {
         
         if (month && month !== 'All') {
             const monthsMap = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', 
-                               Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+                                Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
             const monthNum = monthsMap[month];
             historyQuery = historyQuery.like('date', `%-${monthNum}-%`);
         }
@@ -40,17 +41,16 @@ router.get('/stats', auth, async (req, res) => {
     }
 });
 
-// NEW: Daily Analytics Route
+// 2. Updated Daily Analytics Route
 router.get('/daily', auth, async (req, res) => {
     try {
         const userId = req.user.userId;
 
-        // Directly fetch from habits table 
-        // We assume 'current' and 'target' are columns in your 'habits' table
         const { data: habits, error: habitError } = await supabase
             .from('habits')
             .select('id, title, category, current, target') 
-            .eq('user_id', userId);
+            .eq('user_id', userId)
+            .eq('is_archived', false); // <--- ADD THIS FILTER
 
         if (habitError) throw habitError;
 

@@ -22,6 +22,28 @@ cron.schedule('*/30 * * * *', () => {
     runNotificationCheck(); 
 });
 
+// Runs every day at 00:00 (Midnight)
+cron.schedule('0 0 * * *', async () => {
+    console.log('Running Midnight Habit Reset...');
+    
+    try {
+      // 1. Reset Everyday Habits
+      // If they completed it, streak continues. If not, streak resets to 0.
+      // This SQL logic assumes you have a 'streak' and 'completed_today' column
+      await supabase.rpc('reset_daily_habits'); // Using a Postgres Function is more efficient
+  
+      // 2. Archive non-recurring habits that were either completed or are just old
+      await supabase
+        .from('habits')
+        .update({ is_archived: true })
+        .eq('is_everyday', false);
+  
+      console.log('Daily reset complete.');
+    } catch (err) {
+      console.error('Reset failed:', err);
+    }
+  });
+
 app.use(cors());
 app.use(express.json());
 
