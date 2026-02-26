@@ -150,18 +150,32 @@ router.get('/vapid-public-key', (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
-// 2. Receive and Save Subscription to Supabase
+// 2. Receiving and Saving Subscription (ON Toggle)
 router.post('/subscribe', authMiddleware, async (req, res) => {
   const { subscription } = req.body;
   const { error } = await supabase
     .from('push_subscriptions')
-    .upsert([{ 
-      user_id: req.user.userId, 
-      subscription_json: subscription 
-    }]);
+    .upsert(
+      { 
+        user_id: req.user.userId, 
+        subscription_json: subscription 
+      }, 
+      { onConflict: 'user_id' } // Resolves conflict based on your SQL unique constraint
+    );
 
   if (error) return res.status(500).json({ error: error.message });
   res.status(201).json({ success: true });
+});
+
+// 3. Remove subscription (OFF Toggle)
+router.delete('/unsubscribe', authMiddleware, async (req, res) => {
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .delete()
+    .eq('user_id', req.user.userId);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(204).send(); 
 });
 
 // TEMPORARY: Manual Test Route
