@@ -24,21 +24,17 @@ cron.schedule('*/30 * * * *', () => {
 
 // 3. SCHEDULE Midnight Habit Reset (Runs every day at 00:00)
 cron.schedule('0 0 * * *', async () => {
-    console.log('Running Midnight Habit Reset...');
-    try {
-      // Reset daily progress/streaks using your stored procedure
-      await supabase.rpc('reset_daily_habits'); 
-  
-      // Archive non-recurring habits
-      await supabase
-        .from('habits')
-        .update({ is_archived: true })
-        .eq('is_everyday', false);
-  
-      console.log('Daily reset complete.');
-    } catch (err) {
-      console.error('Reset failed:', err);
-    }
+  console.log("🕛 Midnight Reset Triggered...");
+  try {
+      const { error } = await supabase.rpc('reset_daily_habits');
+      if (error) throw error;
+      console.log("✅ Reset successful");
+  } catch (err) {
+      console.error("❌ Reset failed:", err);
+  }
+}, {
+  scheduled: true,
+  timezone: "Asia/Kolkata" // Ensure this is exactly "Asia/Kolkata"
 });
 
 app.use(cors());
