@@ -20,34 +20,63 @@ router.get('/daily', auth, async (req, res) => {
     }
 });
 
-// 2. Weekly Trend (Last 7 Days)
+// 2. Weekly Trend (Last 7 Days) - UPDATED TO FILL GAPS
 router.get('/history-trend', auth, async (req, res) => {
     try {
-      const userId = req.user.userId;
-      const { data, error } = await supabase
-        .from('habit_history')
-        .select('date, achieved_value, target_value')
-        .eq('user_id', userId)
-        .order('date', { ascending: true })
-        .limit(100);
-  
-      if (error) throw error;
-  
-      const trendData = data.reduce((acc, entry) => {
-        if (!acc[entry.date]) acc[entry.date] = { date: entry.date, total: 0, achieved: 0 };
-        acc[entry.date].total += entry.target_value;
-        acc[entry.date].achieved += entry.achieved_value;
-        return acc;
-      }, {});
-  
-      const formattedData = Object.values(trendData).map(day => ({
-        date: new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' }),
-        percentage: Math.round((day.achieved / day.total) * 100) || 0
-      }));
-  
-      res.json(formattedData);
+        const userId = req.user.userId;
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // 1. Fetch historical data
+        const { data: history, error } = await supabase
+            .from('habit_history')
+            .select('date, achieved_value, target_value')
+            .eq('user_id', userId)
+            .order('date', { ascending: true });
+
+        if (error) throw error;
+
+        // 2. Fetch Live habits for today's real-time score
+        const { data: liveHabits } = await supabase
+            .from('habits')
+            .select('current, target')
+            .eq('user_id', userId)
+            .eq('is_archived', false);
+
+        // Create a map for quick lookup
+        const trendMap = {};
+        history?.forEach(entry => {
+            if (!trendMap[entry.date]) trendMap[entry.date] = { achieved: 0, total: 0 };
+            trendMap[entry.date].total += entry.target_value;
+            trendMap[entry.date].achieved += entry.achieved_value;
+        });
+
+        // Add today's live progress to the map
+        if (liveHabits && liveHabits.length > 0) {
+            const liveStats = liveHabits.reduce((acc, h) => {
+                acc.total += h.target;
+                acc.achieved += h.current;
+                return acc;
+            }, { total: 0, achieved: 0 });
+            trendMap[todayStr] = liveStats;
+        }
+
+        // 3. Generate exactly the last 7 days (including today)
+        const formattedData = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split('T')[0];
+            
+            const dayData = trendMap[dateStr];
+            formattedData.push({
+                date: d.toLocaleDateString('en-US', { weekday: 'short' }),
+                percentage: dayData ? Math.round((dayData.achieved / dayData.total) * 100) : 0
+            });
+        }
+
+        res.json(formattedData);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
