@@ -212,4 +212,38 @@ router.post('/send-test-push', authMiddleware, async (req, res) => {
   }
 });
 
+// 1. REQUEST PASSWORD RESET CODE
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+
+  if (error) return res.status(400).json({ error: error.message });
+  
+  res.json({ message: "Password reset code sent to your email." });
+});
+
+// 2. VERIFY CODE AND UPDATE PASSWORD
+router.post('/reset-password', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+
+  // Verify the OTP (the code sent to email)
+  const { data, error: verifyError } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: 'recovery'
+  });
+
+  if (verifyError) return res.status(400).json({ error: "Invalid or expired code" });
+
+  // If code is valid, update the password
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: newPassword
+  });
+
+  if (updateError) return res.status(400).json({ error: updateError.message });
+
+  res.json({ success: true, message: "Password updated successfully!" });
+});
+
 module.exports = router;
