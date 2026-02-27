@@ -4,15 +4,15 @@ dns.setDefaultResultOrder('ipv4first');
 const cron = require('node-cron');
 const express = require('express');
 const cors = require('cors');
-const supabase = require('./config/supabase'); // Ensure supabase is imported for the cron reset
+const supabase = require('./src/config/supabase'); // Ensure supabase is imported for the cron reset
 require('dotenv').config();
 
 // 1. IMPORT the function from your worker file
-const { runNotificationCheck } = require('./workers/notificationWorker'); 
+const { runNotificationCheck } = require('./src/workers/notificationWorker'); 
 
-const authRoutes = require('./routes/authRoutes');
-const habitRoutes = require('./routes/habitRoutes');
-const analyticsRoutes = require('./routes/analyticsRoutes');
+const authRoutes = require('./src/routes/authRoutes');
+const habitRoutes = require('./src/routes/habitRoutes');
+const analyticsRoutes = require('./src/routes/analyticsRoutes');
 
 const app = express();
 
