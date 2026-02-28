@@ -17,9 +17,9 @@ const analyticsRoutes = require('./src/routes/analyticsRoutes');
 const app = express();
 
 // 2. SCHEDULE the Notification Check (Runs every 30 minutes)
-cron.schedule('*/30 * * * *', () => { 
-    console.log("Cron trigger: Starting notification check...");
-    runNotificationCheck(); 
+cron.schedule('0 */2 * * *', () => { 
+  console.log("Cron trigger: Starting notification check every 2 hours...");
+  runNotificationCheck(); 
 });
 
 // 3. SCHEDULE Midnight Habit Reset (Runs every day at 00:00)
